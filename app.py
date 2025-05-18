@@ -1,35 +1,43 @@
-
 from flask import Flask, request, jsonify
-import pickle
 import numpy as np
-import os
+import pickle
 
 app = Flask(__name__)
 
-model = pickle.load(open("model.pkl", "rb"))
-scaler = pickle.load(open("scaler.pkl", "rb"))
-label_encoder = pickle.load(open("label_encoder.pkl", "rb"))
+# Load your scaler and model (adjust file names if needed)
+with open('scaler.pkl', 'rb') as f:
+    scaler = pickle.load(f)
+
+with open('model.pkl', 'rb') as f:
+    model = pickle.load(f)
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.json
-    features = np.array([[
-        data['latitude'],
-        data['longitude'],
-        data['population'],
-        data['income'],
-        data['youth_ratio'],
-        data['rent'],
-        data['crime'],
-        data['cafes'],
-        data['grocery'],
-        data['urban']
-    ]])
-    features_scaled = scaler.transform(features)
-    prediction = model.predict(features_scaled)
-    predicted_label = label_encoder.inverse_transform(prediction)
-    return jsonify({'predicted_category': predicted_label[0]})
+    data = request.get_json()
+
+    # Make sure all 12 features are present
+    required_features = [
+        "latitude", "longitude", "population", "income", "youth_ratio",
+        "rent", "crime", "cafes", "grocery", "urban", "feature11", "feature12"
+    ]
+
+    missing = [f for f in required_features if f not in data]
+    if missing:
+        return jsonify({"error": f"Missing features: {missing}"}), 400
+
+    # Extract features in correct order
+    features = [data[feature] for feature in required_features]
+
+    # Convert to numpy array and reshape for scaler/model
+    features_np = np.array(features).reshape(1, -1)
+
+    # Scale features
+    features_scaled = scaler.transform(features_np)
+
+    # Predict category
+    prediction = model.predict(features_scaled)[0]
+
+    return jsonify({"predicted_category": prediction})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=True)
