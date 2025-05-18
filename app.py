@@ -1,43 +1,41 @@
 from flask import Flask, request, jsonify
-import numpy as np
 import pickle
+import pandas as pd
 
 app = Flask(__name__)
 
-# Load your scaler and model (adjust file names if needed)
-with open('scaler.pkl', 'rb') as f:
-    scaler = pickle.load(f)
-
-with open('model.pkl', 'rb') as f:
-    model = pickle.load(f)
+# Load model, scaler, and label encoder
+model = pickle.load(open("model.pkl", "rb"))
+scaler = pickle.load(open("scaler.pkl", "rb"))
+label_encoder = pickle.load(open("label_encoder.pkl", "rb"))
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.get_json()
+    data = request.json
 
-    # Make sure all 12 features are present
     required_features = [
-        "latitude", "longitude", "population", "income", "youth_ratio",
-        "rent", "crime", "cafes", "grocery", "urban", "feature11", "feature12"
+        'latitude', 'longitude', 'population', 'income', 'youth_ratio',
+        'rent', 'crime', 'cafes', 'grocery', 'urban'
     ]
 
+    # Check for missing features
     missing = [f for f in required_features if f not in data]
     if missing:
-        return jsonify({"error": f"Missing features: {missing}"}), 400
+        return jsonify({'error': f'Missing features: {missing}'}), 400
 
-    # Extract features in correct order
-    features = [data[feature] for feature in required_features]
-
-    # Convert to numpy array and reshape for scaler/model
-    features_np = np.array(features).reshape(1, -1)
+    # Prepare input as a DataFrame to keep feature names for scaler
+    features_df = pd.DataFrame([data], columns=required_features)
 
     # Scale features
-    features_scaled = scaler.transform(features_np)
+    features_scaled = scaler.transform(features_df)
 
-    # Predict category
-    prediction = model.predict(features_scaled)[0]
+    # Predict
+    prediction = model.predict(features_scaled)
 
-    return jsonify({"predicted_category": prediction})
+    # Decode label to original category
+    predicted_label = label_encoder.inverse_transform(prediction)
+
+    return jsonify({'predicted_category': predicted_label[0]})
 
 if __name__ == '__main__':
     app.run(debug=True)
